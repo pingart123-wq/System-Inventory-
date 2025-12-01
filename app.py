@@ -56,7 +56,7 @@ if 'current_view' not in st.session_state:
 def set_view(view):
     """Callback function for navigation buttons."""
     st.session_state.current_view = view
-    # st.rerun() is now handled after the button click
+    st.rerun() # Ensure the page re-renders to the new view
 
 def add_item_callback(new_name, new_cat, new_price, new_qty):
     """Callback function for adding a new item."""
@@ -88,7 +88,9 @@ def delete_item_callback(item_id):
     st.toast("Item Purged.")
     st.rerun()
 
-# --- CUSTOM CSS (FIXED BUTTON STYLING FOR SIDEBAR) ---
+# --- CUSTOM CSS (HTML/JS theme translated to Streamlit CSS) ---
+# Note: Streamlit's native theme handling and layout features are used where possible,
+# but the custom CSS is necessary to achieve the specific cyberpunk aesthetic.
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Rajdhani:wght@300;500;700&display=swap');
@@ -133,13 +135,37 @@ st.markdown("""
         margin-bottom: 2rem;
         text-shadow: 0 0 10px rgba(0, 243, 255, 0.5);
     }
+
+    /* Input Fields */
+    .stTextInput input, .stNumberInput input, .stSelectbox div[data-baseweb="select"] {
+        background-color: rgba(0,0,0,0.3);
+        color: white;
+        border-radius: 8px;
+        border: 1px solid rgba(255,255,255,0.1);
+    }
     
-    /* General Button Styling for the App Body */
+    /* Custom Card/Metric Styling (replaces stat-card from HTML) */
+    div[data-testid="metric-container"] {
+        background-color: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255,255,255,0.05);
+        border-radius: 15px;
+        padding: 10px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        border-left: 4px solid var(--accent-cyan);
+    }
+    /* Metric Value Styling */
+    div[data-testid="stMetricValue"] {
+        font-family: 'Orbitron'; 
+        font-size: 2rem; 
+        color: var(--text-main);
+    }
+    
+    /* Primary Buttons (e.g., ADD ITEM, PURGE) */
     .stButton > button {
         background: linear-gradient(135deg, var(--accent-purple), #7a00ff);
         color: white;
         border: none;
-        border-radius: 50px; /* Rounded pill style for main action buttons */
+        border-radius: 50px;
         font-family: 'Orbitron', sans-serif;
         font-weight: 700;
         transition: 0.3s;
@@ -149,40 +175,7 @@ st.markdown("""
         transform: translateY(-2px);
     }
 
-    /* --- SIDEBAR NAVIGATION BUTTON OVERRIDES (Makes the nav menu look clean) --- */
-    /* This targets all buttons inside the sidebar container */
-    section[data-testid="stSidebar"] div.stButton > button {
-        border-radius: 8px; /* Square/Muted style for navigation */
-        font-family: 'Rajdhani', sans-serif;
-        font-weight: 500;
-        margin: 5px 0;
-        height: 3rem; /* Taller hit area */
-        display: flex; /* Allow icon/text alignment */
-        align-items: center;
-        justify-content: left;
-        padding-left: 20px;
-        transition: all 0.2s;
-    }
-    
-    /* Active Navigation Button (Primary Type in Sidebar) */
-    section[data-testid="stSidebar"] div.stButton > button[kind="primary"] {
-        background: rgba(0, 243, 255, 0.1) !important;
-        color: var(--accent-cyan) !important;
-        border: 1px solid var(--accent-cyan) !important;
-        box-shadow: 0 0 10px rgba(0, 243, 255, 0.4);
-    }
-    /* Inactive Navigation Button (Secondary Type in Sidebar) */
-    section[data-testid="stSidebar"] div.stButton > button[kind="secondary"] {
-        background: rgba(255, 255, 255, 0.05) !important;
-        color: var(--text-main) !important;
-        border: 1px solid rgba(255, 255, 255, 0.1) !important;
-    }
-    section[data-testid="stSidebar"] div.stButton > button[kind="secondary"]:hover {
-        background: rgba(0, 243, 255, 0.08) !important;
-        color: var(--accent-cyan) !important;
-    }
-
-    /* Secondary Buttons (e.g., DELETE in the Inventory Card) */
+    /* Secondary Buttons (e.g., DELETE) */
     button[kind="secondary"] {
         background: rgba(255, 42, 109, 0.1) !important;
         color: var(--danger) !important;
@@ -204,7 +197,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- SIDEBAR & NAVIGATION (FIXED) ---
+# --- SIDEBAR & NAVIGATION ---
 with st.sidebar:
     st.markdown("""
         <div class="sidebar-logo">
@@ -219,33 +212,34 @@ with st.sidebar:
     
     for view, icon in nav_options:
         is_active = (st.session_state.current_view == view)
+        button_style = "active" if is_active else ""
         
-        # We construct a simple label with the icon. We rely on CSS for the layout.
-        button_label = f"<i class='fa-solid {icon}'></i> &nbsp; {view}"
-        
-        # Use a native Streamlit button. The 'type' controls the visual state via CSS.
-        if st.button(
-            button_label, 
-            key=f"nav_{view}", 
-            use_container_width=True, 
-            type="primary" if is_active else "secondary",
-            help=f"Go to {view} view"
-        ):
-             # When clicked, update the view and rerun
+        # Use HTML/CSS for custom sidebar button style
+        st.markdown(f"""
+            <div class='nav-item {button_style}' onclick='window.parent.document.querySelector("[data-testid=\\"stAppViewContainer\\"]")
+                                                              .postMessage({{"streamlit:view": "{view}"}}, "*")'>
+                <i class="fa-solid {icon}"></i> {view}
+            </div>
+        """, unsafe_allow_html=True)
+        # Fallback for click if the HTML JS doesn't work perfectly
+        if st.button(view, key=f"nav_{view}", use_container_width=True, help=f"Go to {view} view", type="secondary" if not is_active else "primary"):
              set_view(view)
-             st.rerun() # Ensure the page re-renders immediately
 
 
     st.divider()
     
     # "Add Item" via Streamlit Dialog
-    # The primary button style from the main app body is used here (purple gradient)
-    if st.button("+ ADD ITEM", key="sidebar_add_item_button", use_container_width=True):
-        st.session_state.show_add_item_dialog = True
-        st.rerun() # Rerunning to show the dialog
+    # The dialog content is defined below
+    
+    if st.button("+ ADD ITEM", use_container_width=True):
+         st.session_state.show_add_item_dialog = True
+         st.rerun() # Rerunning to show the dialog
     
     st.markdown('<div style="margin-top: 100px;"></div>', unsafe_allow_html=True)
     
+    # Note: Theme switching (Light/Dark mode) is complex to implement fully in Streamlit
+    # without external libraries, as it requires modifying the Streamlit component themes.
+    # The HTML version's theme toggle is omitted here for simplicity and stability.
     st.markdown("<center style='color:var(--text-muted); font-size:0.8rem;'>Streamlit v1.0<br>CyberSec Protocol Active</center>", unsafe_allow_html=True)
 
 # --- ADD ITEM DIALOG (MODAL) ---
@@ -269,9 +263,9 @@ if 'show_add_item_dialog' in st.session_state and st.session_state.show_add_item
                 st.session_state.show_add_item_dialog = False
             
         # Add a close button logic for the dialog
-        if st.button("Cancel", key="dialog_cancel", type="secondary"): # Use secondary for cancel
-            st.session_state.show_add_item_dialog = False
-            st.rerun()
+        if st.button("Cancel", key="dialog_cancel"):
+             st.session_state.show_add_item_dialog = False
+             st.rerun()
 
 # --- LOGIC & VIEWS ---
 
