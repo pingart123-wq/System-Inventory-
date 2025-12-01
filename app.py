@@ -2,8 +2,8 @@ import streamlit as st
 import pandas as pd
 import json
 import os
+import plotly.express as px  # <-- RE-ADDED PLOTLY IMPORT
 import time
-# Removed: import plotly.express as px
 
 # --- CONFIGURATION ---
 st.set_page_config(
@@ -45,8 +45,6 @@ if 'inventory' not in st.session_state:
     st.session_state.inventory = load_data()
 
 # --- CUSTOM CSS (THEME) ---
-# The CSS is kept, but note that the Plotly chart styles were manually handled by Plotly's layout updates.
-# st.bar_chart will use Streamlit's default theme (which respects the general CSS colors).
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Rajdhani:wght@300;500;700&display=swap');
@@ -235,14 +233,22 @@ elif selected_view == "Analytics":
     with col_charts1:
         st.subheader("Inventory Value Distribution")
         if not df.empty:
-            # Calculate total value and group by category
-            chart_data = df.copy()
-            chart_data['total_val'] = chart_data['price'] * chart_data['qty']
-            chart_data = chart_data.groupby('category')['total_val'].sum().reset_index()
-            chart_data.set_index('category', inplace=True) # Index required for st.bar_chart
-
-            # Use st.bar_chart (simple Streamlit built-in chart)
-            st.bar_chart(chart_data)
+            df['total_val'] = df['price'] * df['qty']
+            chart_data = df.groupby('category')['total_val'].sum().reset_index()
+            
+            # RE-ADDED PLOTLY CODE
+            fig = px.bar(chart_data, x='total_val', y='category', orientation='h', 
+                         text_auto='.2s', color='total_val',
+                         color_continuous_scale=['#00f3ff', '#bc13fe'])
+            
+            fig.update_layout(
+                plot_bgcolor='rgba(0,0,0,0)',
+                paper_bgcolor='rgba(0,0,0,0)',
+                font=dict(color='#e0e6ed', family="Rajdhani"),
+                xaxis=dict(showgrid=False),
+                yaxis=dict(showgrid=False)
+            )
+            st.plotly_chart(fig, use_container_width=True)
         else:
             st.warning("No data available for charts.")
 
