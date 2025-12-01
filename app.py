@@ -29,13 +29,14 @@ def load_data():
     try:
         with open(DATA_FILE, 'r') as f:
             data = json.load(f)
+            if not data:
+                return pd.DataFrame(columns=["id", "name", "category", "price", "qty"])
             # Ensure price and qty are numeric
             df = pd.DataFrame(data)
-            df['price'] = pd.to_numeric(df['price'], errors='coerce').fillna(0)
+            df['price'] = pd.to_numeric(df['price'], errors='coerce').fillna(0.0)
             df['qty'] = pd.to_numeric(df['qty'], errors='coerce').fillna(0).astype(int)
             return df
     except Exception:
-        # Return empty DataFrame on error
         st.error("Error loading data file. Initializing empty inventory.")
         return pd.DataFrame(columns=["id", "name", "category", "price", "qty"])
 
@@ -50,54 +51,63 @@ if 'inventory' not in st.session_state:
     st.session_state.inventory = load_data()
 if 'current_view' not in st.session_state:
     st.session_state.current_view = "Inventory"
-if 'show_add_item_dialog' not in st.session_state:
-    st.session_state.show_add_item_dialog = False
 
 # --- HELPER FUNCTIONS ---
 
 def set_view(view):
     """Callback function for navigation buttons."""
     st.session_state.current_view = view
-    # st.rerun() is now handled after the button click
-
-def add_item_callback(new_name, new_cat, new_price, new_qty):
-    """Callback function for adding a new item."""
-    if not new_name:
-        st.error("Item Name is required.")
-        return
-
-    # Generate a unique ID using current timestamp
-    new_id = int(time.time() * 1000)
-    
-    new_row = pd.DataFrame([{
-        "id": new_id, 
-        "name": new_name, 
-        "category": new_cat, 
-        "price": float(new_price), 
-        "qty": int(new_qty)
-    }])
-    
-    # Prepend new item and save
-    st.session_state.inventory = pd.concat([new_row, st.session_state.inventory], ignore_index=True)
-    save_data(st.session_state.inventory)
-    st.success(f"Component '{new_name}' added to Vault.")
-    st.rerun()
 
 def delete_item_callback(item_id):
     """Callback function for deleting an item."""
     st.session_state.inventory = st.session_state.inventory[st.session_state.inventory['id'] != item_id]
     save_data(st.session_state.inventory)
     st.toast("Item Purged.")
+    # No rerun needed here if button used inside a container that refreshes, 
+    # but strictly speaking, st.rerun() ensures the UI updates immediately.
     st.rerun()
 
-# --- CUSTOM CSS (FIXED BUTTON STYLING FOR SIDEBAR) ---
+# --- MODAL: ADD ITEM (Corrected @st.dialog usage) ---
+@st.dialog("New Component")
+def show_add_item_dialog():
+    with st.form("add_item_form"):
+        name = st.text_input("Item Name", placeholder="e.g. RTX 4090")
+        category = st.selectbox("Category", ["GPU", "CPU", "Mobile", "Laptop", "Accessory", "Other"])
+        
+        c1, c2 = st.columns(2)
+        price = c1.number_input("Price (₱)", min_value=0.0, step=100.0)
+        qty = c2.number_input("Quantity", min_value=0, step=1)
+        
+        submitted = st.form_submit_button("ADD TO VAULT")
+        
+        if submitted:
+            if not name:
+                st.error("Item Name is required.")
+            else:
+                # Generate ID
+                new_id = int(time.time() * 1000)
+                new_row = pd.DataFrame([{
+                    "id": new_id, 
+                    "name": name, 
+                    "category": category, 
+                    "price": float(price), 
+                    "qty": int(qty)
+                }])
+                
+                # Update State and Save
+                st.session_state.inventory = pd.concat([new_row, st.session_state.inventory], ignore_index=True)
+                save_data(st.session_state.inventory)
+                st.success(f"Component '{name}' added.")
+                time.sleep(0.5) # Brief pause to show success message
+                st.rerun()
+
+# --- CUSTOM CSS ---
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Rajdhani:wght@300;500;700&display=swap');
     @import url('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css');
 
-
-    /* Variables for Dark Theme */
+    /* Variables */
     :root {
         --bg-dark: #0a0b10;
         --panel-bg: #13141c;
@@ -108,7 +118,6 @@ st.markdown("""
         --danger: #ff2a6d;
     }
 
-    /* Streamlit overrides for background, fonts, and global text color */
     .stApp {
         background-color: var(--bg-dark);
         background-image: radial-gradient(circle at 10% 20%, rgba(188, 19, 254, 0.1) 0%, transparent 20%), 
@@ -125,7 +134,7 @@ st.markdown("""
         color: var(--text-main); 
     }
 
-    /* Sidebar Styling */
+    /* Sidebar */
     section[data-testid="stSidebar"] {
         background-color: var(--panel-bg);
         border-right: 1px solid rgba(255,255,255,0.05);
@@ -138,12 +147,12 @@ st.markdown("""
         text-shadow: 0 0 10px rgba(0, 243, 255, 0.5);
     }
     
-    /* General Button Styling for the App Body */
+    /* Buttons */
     .stButton > button {
         background: linear-gradient(135deg, var(--accent-purple), #7a00ff);
         color: white;
         border: none;
-        border-radius: 50px; /* Rounded pill style for main action buttons */
+        border-radius: 50px;
         font-family: 'Orbitron', sans-serif;
         font-weight: 700;
         transition: 0.3s;
@@ -153,31 +162,24 @@ st.markdown("""
         transform: translateY(-2px);
     }
 
-    /* --- SIDEBAR NAVIGATION BUTTON OVERRIDES (Makes the nav menu look clean) --- */
-    /* This targets all buttons inside the sidebar container */
+    /* Sidebar Nav Buttons */
     section[data-testid="stSidebar"] div.stButton > button {
-        border-radius: 8px; /* Square/Muted style for navigation */
+        border-radius: 8px;
         font-family: 'Rajdhani', sans-serif;
         font-weight: 500;
         margin: 5px 0;
-        height: 3rem; /* Taller hit area */
-        display: flex; /* Allow text alignment */
-        align-items: center;
-        justify-content: center; /* Center the text and arrows */
-        padding: 0 10px;
-        transition: all 0.2s;
-        /* Ensure the arrow characters are styled well */
+        height: 3rem;
         letter-spacing: 2px; 
     }
     
-    /* Active Navigation Button (Primary Type in Sidebar) */
+    /* Active Nav */
     section[data-testid="stSidebar"] div.stButton > button[kind="primary"] {
         background: rgba(0, 243, 255, 0.1) !important;
         color: var(--accent-cyan) !important;
         border: 1px solid var(--accent-cyan) !important;
         box-shadow: 0 0 10px rgba(0, 243, 255, 0.4);
     }
-    /* Inactive Navigation Button (Secondary Type in Sidebar) */
+    /* Inactive Nav */
     section[data-testid="stSidebar"] div.stButton > button[kind="secondary"] {
         background: rgba(255, 255, 255, 0.05) !important;
         color: var(--text-main) !important;
@@ -188,7 +190,7 @@ st.markdown("""
         color: var(--accent-cyan) !important;
     }
 
-    /* Secondary Buttons (e.g., DELETE in the Inventory Card) */
+    /* Delete Button */
     button[kind="secondary"] {
         background: rgba(255, 42, 109, 0.1) !important;
         color: var(--danger) !important;
@@ -196,7 +198,7 @@ st.markdown("""
         border-radius: 8px !important;
     }
     
-    /* Inventory Item Card Styling (using st.container) */
+    /* Cards */
     .stContainer {
         border-radius: 16px !important;
         background: var(--panel-bg);
@@ -206,13 +208,11 @@ st.markdown("""
     .stContainer:hover {
         border-color: var(--accent-cyan) !important;
     }
-    
 </style>
 """, unsafe_allow_html=True)
 
-# --- SIDEBAR & NAVIGATION (UPDATED WITH << AND >>) ---
+# --- SIDEBAR ---
 with st.sidebar:
-    # Font Awesome link is now in the CSS block, but we still need the logo text here
     st.markdown("""
         <div class="sidebar-logo">
             <i class="fa-solid fa-microchip"></i> ELECTRO<b>VAULT</b>
@@ -221,76 +221,38 @@ with st.sidebar:
     
     st.markdown("### Navigation")
 
-    # Navigation options updated - icons are ignored, we use text now
-    nav_options = [("Inventory", "fa-layer-group"), ("Analytics", "fa-chart-line"), ("Settings", "fa-gear")]
+    nav_options = ["Inventory", "Analytics", "Settings"]
     
-    for view, icon in nav_options: # Icon is kept just for completeness in the list, but not used.
+    for view in nav_options:
         is_active = (st.session_state.current_view == view)
-        
-        # Use the requested ASCII arrows for the button label
-        button_label = f"<< {view.upper()} >>"
-        
-        # Use a native Streamlit button. The 'type' controls the visual state via CSS.
         if st.button(
-            button_label, 
+            f"<< {view.upper()} >>", 
             key=f"nav_{view}", 
             use_container_width=True, 
-            type="primary" if is_active else "secondary",
-            help=f"Go to {view} view"
+            type="primary" if is_active else "secondary"
         ):
-             # When clicked, update the view and rerun
              set_view(view)
-             st.rerun() # Ensure the page re-renders immediately
-
+             st.rerun()
 
     st.divider()
     
-    # "Add Item" button updated with arrows for consistency
+    # Add Item Button triggers the function decorated with @st.dialog
     if st.button("<< + ADD ITEM >>", key="sidebar_add_item_button", use_container_width=True):
-        st.session_state.show_add_item_dialog = True
-        st.rerun() # Rerunning to show the dialog
+        show_add_item_dialog()
     
     st.markdown('<div style="margin-top: 100px;"></div>', unsafe_allow_html=True)
-    
     st.markdown("<center style='color:var(--text-muted); font-size:0.8rem;'>Streamlit v1.0<br>CyberSec Protocol Active</center>", unsafe_allow_html=True)
 
-# --- ADD ITEM DIALOG (MODAL) ---
-if st.session_state.show_add_item_dialog:
-    # Use st.dialog to replicate the modal experience
-    with st.dialog("New Component"):
-        with st.form("add_item_form"):
-            name = st.text_input("Item Name", placeholder="e.g. RTX 4090", key="dialog_name")
-            category = st.selectbox("Category", ["GPU", "CPU", "Mobile", "Laptop", "Accessory", "Other"], key="dialog_cat")
-            
-            c1, c2 = st.columns(2)
-            price = c1.number_input("Price (₱)", min_value=0.0, step=100.0, key="dialog_price")
-            qty = c2.number_input("Quantity", min_value=0, step=1, key="dialog_qty")
-            
-            submitted = st.form_submit_button("ADD TO VAULT")
-            
-            if submitted:
-                # Call the callback with collected values
-                add_item_callback(name, category, price, qty)
-                # Cleanup state after submission
-                st.session_state.show_add_item_dialog = False
-            
-        # Add a close button logic for the dialog
-        if st.button("Cancel", key="dialog_cancel", type="secondary"): # Use secondary for cancel
-            st.session_state.show_add_item_dialog = False
-            st.rerun()
 
-# --- LOGIC & VIEWS ---
-
+# --- MAIN LOGIC ---
 df = st.session_state.inventory
 
 # 1. INVENTORY VIEW
 if st.session_state.current_view == "Inventory":
     st.title("Inventory Index")
     
-    col_header, col_add = st.columns([3, 1])
-    
-    with col_header:
-        search_term = st.text_input("Search", placeholder="Search components...", label_visibility="collapsed")
+    # Search Bar
+    search_term = st.text_input("Search", placeholder="Search components...", label_visibility="collapsed")
     
     # Filter Logic
     df_display = df.copy()
@@ -300,7 +262,7 @@ if st.session_state.current_view == "Inventory":
             df_display['category'].str.contains(search_term, case=False, na=False)
         ]
 
-    # Stats Calculation
+    # Stats
     total_items = df['qty'].sum() if not df.empty else 0
     total_value = (df['price'] * df['qty']).sum() if not df.empty else 0
     low_stock = len(df[df['qty'] < 5]) if not df.empty else 0
@@ -312,26 +274,24 @@ if st.session_state.current_view == "Inventory":
 
     st.markdown("---")
 
-    # Inventory Grid Rendering (3 columns)
+    # Grid Rendering
     if df_display.empty:
         st.info("No items found in the vault matching your search.")
     else:
-        # Define grid columns
+        # Define 3 strict columns
         cols = st.columns(3)
         
-        # Dictionary to map category to Font Awesome icon (for visual appeal)
         category_icons = {
             'GPU': 'fa-memory', 'CPU': 'fa-microchip', 'Mobile': 'fa-mobile-screen',
             'Laptop': 'fa-laptop', 'Accessory': 'fa-headphones', 'Other': 'fa-box'
         }
         
-        for index, row in df_display.iterrows():
+        # FIX: Use enumerate on df_display.iterrows() to ensure grid fills 0-1-2-0-1-2 regardless of search filtering
+        for i, (index, row) in enumerate(df_display.iterrows()):
             item_id = row['id']
-            # Determine the current column index (0, 1, or 2)
-            col_index = index % 3
+            col_index = i % 3
             
             with cols[col_index]:
-                # Use st.container to create the visual card
                 with st.container(border=True):
                     icon_class = category_icons.get(row['category'], 'fa-box')
                     stock_color = "var(--danger)" if row['qty'] < 5 else "var(--accent-cyan)"
@@ -356,10 +316,9 @@ if st.session_state.current_view == "Inventory":
                     
                     st.markdown("---")
 
-                    # Delete Button
                     if st.button("DELETE", key=f"del_{item_id}", type="secondary", use_container_width=True):
                         delete_item_callback(item_id)
-                        
+
 # 2. ANALYTICS VIEW
 elif st.session_state.current_view == "Analytics":
     st.title("System Diagnostics")
@@ -369,16 +328,11 @@ elif st.session_state.current_view == "Analytics":
     with col_charts1:
         st.subheader("Inventory Value Distribution")
         if not df.empty:
-            # Calculate total value and group by category
             chart_data = df.copy()
             chart_data['total_val'] = chart_data['price'] * chart_data['qty']
-            
-            # Group by category and sort (like the HTML version)
             chart_data = chart_data.groupby('category')['total_val'].sum().reset_index()
             chart_data = chart_data.sort_values(by='total_val', ascending=False)
             chart_data.set_index('category', inplace=True) 
-
-            # Use Streamlit's native bar chart
             st.bar_chart(chart_data)
         else:
             st.warning("No data available for charts.")
@@ -386,16 +340,16 @@ elif st.session_state.current_view == "Analytics":
     with col_charts2:
         st.subheader("Top Assets by Value")
         if not df.empty:
-            df['item_value'] = df['price'] * df['qty']
-            # Find the top 5 most valuable individual items (like HTML version)
-            top_items = df.sort_values(by='price', ascending=False).head(5)
+            df_temp = df.copy()
+            df_temp['item_value'] = df_temp['price'] * df_temp['qty']
+            top_items = df_temp.sort_values(by='price', ascending=False).head(5)
             
             st.dataframe(
                 top_items[['name', 'price']], 
                 hide_index=True, 
                 column_config={
                     "name": "Asset",
-                    "price": st.column_config.NumberColumn("Unit Value (₱)", format="₱%.2f")
+                    "price": st.column_config.NumberColumn("Unit Value", format="₱%.2f")
                 }
             )
         else:
@@ -405,7 +359,6 @@ elif st.session_state.current_view == "Analytics":
 elif st.session_state.current_view == "Settings":
     st.title("Configuration")
     
-    # Export Section
     with st.container(border=True):
         st.subheader("Export Database")
         st.caption("Download your current inventory as a JSON file.")
@@ -413,7 +366,7 @@ elif st.session_state.current_view == "Settings":
         json_str = df.to_json(orient="records", indent=4)
         
         st.download_button(
-            label="<i class='fa-solid fa-download'></i> EXPORT JSON",
+            label="EXPORT JSON",
             data=json_str,
             file_name=f"electrovault_backup_{int(time.time())}.json",
             mime="application/json",
@@ -422,13 +375,11 @@ elif st.session_state.current_view == "Settings":
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # Purge Section
     with st.container(border=True):
         st.subheader("System Purge", help="Permanently delete all data.")
         st.markdown(f"<p style='color:var(--danger)'>Permanently delete all inventory records.</p>", unsafe_allow_html=True)
         
         if st.button("PURGE ALL DATA", type="primary", use_container_width=True):
-            # Confirmation dialog logic
             st.session_state.inventory = pd.DataFrame(columns=["id", "name", "category", "price", "qty"])
             save_data(st.session_state.inventory)
             st.toast("System Purged. Memory cleared.")
