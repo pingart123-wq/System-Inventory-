@@ -56,7 +56,7 @@ if 'current_view' not in st.session_state:
 def set_view(view):
     """Callback function for navigation buttons."""
     st.session_state.current_view = view
-    # st.rerun() # Removed redundant rerun call if placed in button logic
+    st.rerun() # Ensure the page re-renders to the new view
 
 def add_item_callback(new_name, new_cat, new_price, new_qty):
     """Callback function for adding a new item."""
@@ -89,7 +89,8 @@ def delete_item_callback(item_id):
     st.rerun()
 
 # --- CUSTOM CSS (HTML/JS theme translated to Streamlit CSS) ---
-# Note: Added CSS for the sidebar buttons
+# Note: Streamlit's native theme handling and layout features are used where possible,
+# but the custom CSS is necessary to achieve the specific cyberpunk aesthetic.
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Rajdhani:wght@300;500;700&display=swap');
@@ -134,40 +135,6 @@ st.markdown("""
         margin-bottom: 2rem;
         text-shadow: 0 0 10px rgba(0, 243, 255, 0.5);
     }
-    
-    /* Custom Styling for Sidebar Navigation Buttons */
-    /* This overrides the default primary/secondary colors to use the custom theme */
-    div.stButton > button {
-        /* General styling for all custom buttons */
-        border-radius: 8px;
-        font-family: 'Rajdhani', sans-serif;
-        font-weight: 700;
-        margin: 5px 0; /* Add vertical spacing */
-        transition: 0.3s;
-    }
-
-    /* Primary Buttons (Active State/Major Actions) */
-    div.stButton > button[kind="primary"] {
-        background: linear-gradient(135deg, var(--accent-purple), #7a00ff) !important;
-        color: white !important;
-        border: 1px solid var(--accent-purple) !important;
-    }
-    div.stButton > button[kind="primary"]:hover {
-        box-shadow: 0 0 15px rgba(188, 19, 254, 0.6);
-        transform: translateY(-1px);
-    }
-
-    /* Secondary Buttons (Inactive State/Delete/Sidebar Nav) */
-    div.stButton > button[kind="secondary"] {
-        background: rgba(255, 255, 255, 0.05) !important; /* Muted background */
-        color: var(--text-main) !important; /* Main text color */
-        border: 1px solid rgba(255, 255, 255, 0.1) !important;
-    }
-    div.stButton > button[kind="secondary"]:hover {
-        background: rgba(0, 243, 255, 0.1) !important; /* Hover effect */
-        border: 1px solid var(--accent-cyan) !important;
-        color: var(--accent-cyan) !important;
-    }
 
     /* Input Fields */
     .stTextInput input, .stNumberInput input, .stSelectbox div[data-baseweb="select"] {
@@ -193,8 +160,22 @@ st.markdown("""
         color: var(--text-main);
     }
     
-    /* Secondary Buttons (e.g., DELETE in card) */
-    /* Override for the specific delete button look */
+    /* Primary Buttons (e.g., ADD ITEM, PURGE) */
+    .stButton > button {
+        background: linear-gradient(135deg, var(--accent-purple), #7a00ff);
+        color: white;
+        border: none;
+        border-radius: 50px;
+        font-family: 'Orbitron', sans-serif;
+        font-weight: 700;
+        transition: 0.3s;
+    }
+    .stButton > button:hover {
+        box-shadow: 0 0 15px rgba(188, 19, 254, 0.6);
+        transform: translateY(-2px);
+    }
+
+    /* Secondary Buttons (e.g., DELETE) */
     button[kind="secondary"] {
         background: rgba(255, 42, 109, 0.1) !important;
         color: var(--danger) !important;
@@ -216,7 +197,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- SIDEBAR & NAVIGATION (FIXED) ---
+# --- SIDEBAR & NAVIGATION ---
 with st.sidebar:
     st.markdown("""
         <div class="sidebar-logo">
@@ -229,35 +210,36 @@ with st.sidebar:
     # Navigation is handled by simple buttons that call set_view
     nav_options = [("Inventory", "fa-layer-group"), ("Analytics", "fa-chart-line"), ("Settings", "fa-gear")]
     
-    # Use native Streamlit buttons for reliable navigation
     for view, icon in nav_options:
         is_active = (st.session_state.current_view == view)
+        button_style = "active" if is_active else ""
         
-        # Use a consistent label with an icon
-        button_label = f"<i class='fa-solid {icon}'></i> {view}"
-        
-        # Streamlit's primary type is used for the active view to highlight it
-        # and secondary for the inactive views.
-        if st.button(
-            button_label, 
-            key=f"nav_{view}", 
-            use_container_width=True, 
-            type="primary" if is_active else "secondary",
-            help=f"Go to {view} view"
-        ):
-            set_view(view)
-            st.rerun() # Trigger a rerun after setting the new view
+        # Use HTML/CSS for custom sidebar button style
+        st.markdown(f"""
+            <div class='nav-item {button_style}' onclick='window.parent.document.querySelector("[data-testid=\\"stAppViewContainer\\"]")
+                                                              .postMessage({{"streamlit:view": "{view}"}}, "*")'>
+                <i class="fa-solid {icon}"></i> {view}
+            </div>
+        """, unsafe_allow_html=True)
+        # Fallback for click if the HTML JS doesn't work perfectly
+        if st.button(view, key=f"nav_{view}", use_container_width=True, help=f"Go to {view} view", type="secondary" if not is_active else "primary"):
+             set_view(view)
+
 
     st.divider()
     
     # "Add Item" via Streamlit Dialog
-    # Logic to show the dialog
-    if st.button("+ ADD ITEM", key="sidebar_add_item", use_container_width=True):
-        st.session_state.show_add_item_dialog = True
-        st.rerun() # Rerunning to show the dialog
+    # The dialog content is defined below
+    
+    if st.button("+ ADD ITEM", use_container_width=True):
+         st.session_state.show_add_item_dialog = True
+         st.rerun() # Rerunning to show the dialog
     
     st.markdown('<div style="margin-top: 100px;"></div>', unsafe_allow_html=True)
     
+    # Note: Theme switching (Light/Dark mode) is complex to implement fully in Streamlit
+    # without external libraries, as it requires modifying the Streamlit component themes.
+    # The HTML version's theme toggle is omitted here for simplicity and stability.
     st.markdown("<center style='color:var(--text-muted); font-size:0.8rem;'>Streamlit v1.0<br>CyberSec Protocol Active</center>", unsafe_allow_html=True)
 
 # --- ADD ITEM DIALOG (MODAL) ---
@@ -272,7 +254,6 @@ if 'show_add_item_dialog' in st.session_state and st.session_state.show_add_item
             price = c1.number_input("Price (₱)", min_value=0.0, step=100.0, key="dialog_price")
             qty = c2.number_input("Quantity", min_value=0, step=1, key="dialog_qty")
             
-            # Using the custom primary styling for the submit button
             submitted = st.form_submit_button("ADD TO VAULT")
             
             if submitted:
@@ -281,10 +262,10 @@ if 'show_add_item_dialog' in st.session_state and st.session_state.show_add_item
                 # Cleanup state after submission
                 st.session_state.show_add_item_dialog = False
             
-        # Add a close button logic for the dialog (using secondary style)
-        if st.button("Cancel", key="dialog_cancel", type="secondary"):
-            st.session_state.show_add_item_dialog = False
-            st.rerun()
+        # Add a close button logic for the dialog
+        if st.button("Cancel", key="dialog_cancel"):
+             st.session_state.show_add_item_dialog = False
+             st.rerun()
 
 # --- LOGIC & VIEWS ---
 
@@ -363,7 +344,7 @@ if st.session_state.current_view == "Inventory":
                     
                     st.markdown("---")
 
-                    # Delete Button (uses the specific secondary style for danger)
+                    # Delete Button
                     if st.button("DELETE", key=f"del_{item_id}", type="secondary", use_container_width=True):
                         delete_item_callback(item_id)
                         
@@ -434,13 +415,12 @@ elif st.session_state.current_view == "Settings":
         st.subheader("System Purge", help="Permanently delete all data.")
         st.markdown(f"<p style='color:var(--danger)'>Permanently delete all inventory records.</p>", unsafe_allow_html=True)
         
-        # Confirmation logic should ideally use a dialog, but for simplicity, we'll keep the direct action.
         if st.button("PURGE ALL DATA", type="primary", use_container_width=True):
-            # Clear inventory
+            # Confirmation dialog logic
             st.session_state.inventory = pd.DataFrame(columns=["id", "name", "category", "price", "qty"])
             save_data(st.session_state.inventory)
             st.toast("System Purged. Memory cleared.")
-            # time.sleep(1) # Removed sleep for faster user experience
+            time.sleep(1)
             st.rerun()
 
     st.markdown("<br><center style='color:var(--text-muted)'>ElectroVault Streamlit v1.0<br>Secure Connection Established</center>", unsafe_allow_html=True)
