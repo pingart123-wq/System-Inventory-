@@ -171,6 +171,7 @@ df = st.session_state.inventory
 
 # 1. INVENTORY VIEW
 if selected_view == "Inventory":
+    st.title("Inventory Index")
     # Header & Search
     c1, c2 = st.columns([3, 1])
     with c1:
